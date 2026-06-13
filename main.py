@@ -40,6 +40,8 @@ NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", 'False').strip().lower() == 'true'
 EMAIL = os.getenv("EMAIL", "").strip()
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "").strip()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK", "").strip()
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+TELEGRAM_USER_ID = os.getenv("TELEGRAM_USER_ID", "").strip()
 
 # Read the configuration from oci_config file
 config = configparser.ConfigParser()
@@ -48,12 +50,15 @@ try:
     OCI_USER_ID = config.get('DEFAULT', 'user')
     if OCI_COMPUTE_SHAPE not in (ARM_SHAPE, E2_MICRO_SHAPE):
         raise ValueError(f"{OCI_COMPUTE_SHAPE} is not an acceptable shape")
+    # Exclude path variables (OCI_CONFIG, SSH_AUTHORIZED_KEYS_FILE) from space check
+    # as they may legitimately contain spaces in directory names
     env_has_spaces = any(isinstance(confg_var, str) and " " in confg_var
-                        for confg_var in [OCI_CONFIG, OCT_FREE_AD,WAIT_TIME,
-                                SSH_AUTHORIZED_KEYS_FILE, OCI_IMAGE_ID, 
-                                OCI_COMPUTE_SHAPE, SECOND_MICRO_INSTANCE, 
-                                OCI_SUBNET_ID, OS_VERSION, NOTIFY_EMAIL,EMAIL,
-                                EMAIL_PASSWORD, DISCORD_WEBHOOK]
+                        for confg_var in [OCT_FREE_AD,
+                                OCI_IMAGE_ID, 
+                                OCI_COMPUTE_SHAPE,
+                                OCI_SUBNET_ID, OS_VERSION, EMAIL,
+                                EMAIL_PASSWORD, DISCORD_WEBHOOK,
+                                TELEGRAM_TOKEN, TELEGRAM_USER_ID]
                         )
     config_has_spaces = any(' ' in value for section in config.sections() 
                             for _, value in config.items(section))
@@ -369,6 +374,24 @@ def send_discord_message(message):
             logging.error("Failed to send Discord message: %s", e)
 
 
+def send_telegram_message(message):
+    """Send a message to Telegram using the bot token and chat ID if available."""
+    if TELEGRAM_TOKEN and TELEGRAM_USER_ID:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_USER_ID, "text": message}
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            logging.error("Failed to send Telegram message: %s", e)
+
+
+def send_notification(message):
+    """Send a notification to all configured channels (Discord, Telegram)."""
+    send_discord_message(message)
+    send_telegram_message(message)
+
+
 def launch_instance():
     """Launches an OCI Compute instance using the specified parameters.
 
@@ -484,11 +507,11 @@ def launch_instance():
 
 
 if __name__ == "__main__":
-    send_discord_message("🚀 OCI Instance Creation Script: Starting up! Let's create some cloud magic!")
+    send_notification("🚀 OCI Instance Creation Script: Starting up! Let's create some cloud magic!")
     try:
         launch_instance()
-        send_discord_message("🎉 Success! OCI Instance has been created. Time to celebrate!")
+        send_notification("🎉 Success! OCI Instance has been created. Time to celebrate!")
     except Exception as e:
         error_message = f"😱 Oops! Something went wrong with the OCI Instance Creation Script:\n{str(e)}"
-        send_discord_message(error_message)
+        send_notification(error_message)
         raise
