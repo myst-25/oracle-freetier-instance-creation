@@ -324,6 +324,15 @@ def execute_oci_command(client, method, *args, **kwargs):
                     "code": srv_err.code,
                     "message": srv_err.message}
             handle_errors(args, data, logging_step5)
+        except Exception as e:
+            error_str = str(e).lower()
+            if "timeout" in error_str or "connection" in error_str or "gaierror" in error_str:
+                data = {"status": 502,
+                        "code": "NetworkError",
+                        "message": str(e)}
+                handle_errors(args, data, logging_step5)
+            else:
+                raise
 
 
 def generate_ssh_key_pair(public_key_file: Union[str, Path], private_key_file: Union[str, Path]):
@@ -504,6 +513,17 @@ def launch_instance():
                 "message": srv_err.message,
             }
             handle_errors("launch_instance", data, logging_step5)
+        except Exception as e:
+            error_str = str(e).lower()
+            if "timeout" in error_str or "connection" in error_str or "gaierror" in error_str:
+                data = {
+                    "status": 502,
+                    "code": "NetworkError",
+                    "message": str(e),
+                }
+                handle_errors("launch_instance", data, logging_step5)
+            else:
+                raise
 
 
 if __name__ == "__main__":
